@@ -53,19 +53,20 @@ defmodule Hourai.Commands do
     Region: `#{guild.region}`
     Members: `#{guild.member_count}`
     """
-    if Enum.any?(guild.roles) do
-      response = response <> "Roles: #{Util.guild_role_list(guild)}\n"
-    end
-    if Enum.any?(Enum.filter(guild.channels, fn c -> c.type != 0 end)) do
-      response = response <> "Text Channels: #{Util.guild_text_channel_list(guild)}\n"
-    end
-    if Enum.any?(Enum.filter(guild.channels, fn c -> c.type != 2  end)) do
-      response = response <> "Voice Channels: #{Util.guild_voice_channel_list(guild)}\n"
-    end
+    response =
+      if Enum.any?(guild.roles),
+      do: response <> "Roles: #{Util.guild_role_list(guild)}\n",
+      else: response
+    response =
+      if Enum.any?(Enum.filter(guild.channels, fn c -> c.type != 0 end)),
+      do: response <> "Text Channels: #{Util.guild_text_channel_list(guild)}\n",
+      else: response
+    response =
+      if Enum.any?(Enum.filter(guild.channels, fn c -> c.type != 2  end)),
+      do: response <> "Voice Channels: #{Util.guild_voice_channel_list(guild)}\n",
+      else: response
     icon_url = Constants.guild_icon_url(guild)
-    if icon_url do
-      response = response <> icon_url
-    end
+    response = if icon_url, do: response <> icon_url, else: response
     Util.reply(response, msg)
   end
 
