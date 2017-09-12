@@ -1,12 +1,41 @@
 defmodule Hourai.Util do
 
+  use Bitwise
+
   alias Nostrum.Api
-  #alias Nostrum.Cache
 
   def reply(content, msg) do
     Task.async fn ->
       Api.create_message(msg.channel_id, content)
     end
+  end
+
+  @doc"""
+
+  Gets the full set of permissionns for a role set within a guild.
+  Returns in integer form
+
+  """
+  def get_guild_permission(guild, roles) do
+    get_roles(guild, roles)
+    |> Enum.reduce(0, fn(r, acc) -> acc ||| r.permissions end)
+  end
+
+  def get_roles(guild, roles) do
+    role_set = roles |> Enum.into(%MapSet{})
+    guild.roles
+    |> Enum.filter(&MapSet.member?(role_set, &1.id))
+  end
+
+  def get_guild_member(user_id ,guild) do
+    case Enum.find(guild.members, :error, &(&1.user.id == user_id)) do
+      :error -> {:error, "Guild member not found"}
+      member -> {:ok, member}
+    end
+  end
+
+  def me do
+    Nostrum.Cache.Me.get()
   end
 
   def guild_role_list(guild) do
@@ -30,29 +59,18 @@ defmodule Hourai.Util do
     |> codify_list(fn c -> c.name end)
   end
 
-  def codify_list(list, str_fn) do
+  def codify_list(list, str_fn \\ fn x -> x end) do
     list
-    |> Enum.map(str_fn)
-    |> Enum.map(fn val -> "`#{val}`" end)
-    |> Enum.join(" ")
+    |> Enum.map(fn val -> "`#{str_fn.(val)}`" end)
+    |> Enum.join(", ")
   end
 
   def id_string(user) do
     "#{user.username}##{user.discriminator} (#{user.id})"
   end
 
-  #def to_users(user_set) do
-    #Enum.map fn usr ->
-      #case usr do
-        ##id when is_int(usr) ->
-          ##usr_id = id
-        #"<@" <> user_id <> ">" ->
-          #usr_id = String.to_integer(user_id)
-        ##id when is_str(usr) ->
-          ##usr_id = String.to_integer(usr)
-      #end
-      #Cache.User.get!(usr_id)
-    #end
-  #end
+  def mention(user) do
+    "<@#{user.id}>"
+  end
 
 end

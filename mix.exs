@@ -31,6 +31,11 @@ defmodule Hourai.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:nostrum, git: "https://github.com/Kraigie/nostrum.git"}]
+    [
+      {:nostrum, git: "https://github.com/Kraigie/nostrum.git"},
+      {:postgrex, ">= 0.0.0"},
+      {:ecto, "~> 2.1"},
+      {:ecto_enum, "~> 1.0"}
+    ]
   end
 end

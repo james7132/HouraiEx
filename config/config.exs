@@ -1,5 +1,18 @@
 use Mix.Config
 
+config :hourai,
+  ecto_repos: [Hourai.Repo]
+
+config :hourai, Hourai.Repo,
+  adapter: Ecto.Adapters.Postgres,
+  database: "hourai",
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  port: "5432",
+  migration_primary_key: [id: :bigserial, type: :integer],
+  migration_timestamps: [type: :utc_datetime]
+
 config :logger,
   level: :info
 
