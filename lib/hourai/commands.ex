@@ -46,7 +46,7 @@ defmodule Hourai.Commands do
   @prefix "~"
 
   defp parse_comment(msg) do
-    case msg.content do
+    case String.trim(msg.content) do
       @prefix <> content -> {:ok, content}
       _ -> {:error, "No command prefix"}
     end
@@ -96,6 +96,48 @@ defmodule Hourai.Commands do
   def execute(["avatar"| _], msg) do
     msg.mentions
     |> Enum.map(&Constants.get_avatar_url(&1))
+    |> Enum.filter(fn a -> a != nil end)
+    |> Enum.join("\n")
+    |> Util.reply(msg)
+  end
+
+  def execute(["whois" | _], msg) do
+    user = Util.get_default_target_user(msg)
+    member =
+      with {:ok, guild} <- Cache.Guild.GuildServer.get(channel_id: msg.channel_id),
+           {:ok, guild_member} <- Util.get_guild_member(user.id, guild) do
+         roles = Util.get_roles(guild, guild_member.roles)
+                 |> Enum.reject(fn r -> String.contains?(r.name, "everyone") end)
+         {:ok, guild_member, roles}
+      end
+
+    username = "Username: `#{Util.id_string(user)}`"
+    created_on = "Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`"
+    avatar = Constants.get_avatar_url(user)
+    case member do
+      {:ok, guild_member, roles} ->
+        [
+          username,
+          case Map.get(guild_member, :nick) do
+            nil -> nil
+            nick -> "Nickname: `#{nick}`"
+          end,
+          created_on,
+          case Map.get(guild_member, :joined_at) do
+            nil -> nil
+            joined_at ->
+              {:ok, join_date, _} = DateTime.from_iso8601(joined_at)
+              "Joined on: `#{DateTime.to_string(join_date)}`"
+          end,
+          case roles do
+            nil -> nil
+            role_list -> "Roles: #{Util.codify_list(role_list, fn r -> r.name end)}"
+          end,
+          avatar
+        ]
+      {:error, _} -> [username, created_on, avatar]
+    end
+    |> Enum.filter(fn x -> x != nil end)
     |> Enum.join("\n")
     |> Util.reply(msg)
   end
@@ -130,11 +172,7 @@ defmodule Hourai.Commands do
 
   def execute(["server", "permissions" | _], msg) do
     with {:ok, guild} <- Precondition.in_guild(msg) do
-      user =
-        case Enum.at(msg.mentions, 0) do
-          nil -> msg.author
-          user -> user
-        end
+      user = Util.get_default_target_user(msg)
       with {:ok, member} <- Util.get_guild_member(user.id, guild) do
         guild
         |> Util.get_guild_permission(member.roles)

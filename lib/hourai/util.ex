@@ -34,12 +34,22 @@ defmodule Hourai.Util do
     end
   end
 
+  def get_default_target_user(msg) do
+    case Enum.at(msg.mentions, 0) do
+      nil -> msg.author
+      user -> user
+    end
+  end
+
   def me do
     Nostrum.Cache.Me.get()
   end
 
-  def guild_role_list(guild) do
-    guild.roles
+  def guild_role_list(guild, role_ids \\ []) do
+    case role_ids do
+      [] -> guild.roles
+      role_list -> get_roles(guild, role_list)
+    end
     |> Enum.drop(1)
     |> Enum.reverse
     |> codify_list(fn r -> r.name end)
@@ -71,6 +81,12 @@ defmodule Hourai.Util do
 
   def mention(user) do
     "<@#{user.id}>"
+  end
+
+  def created_on(snowflake) do
+    snowflake >>> 22
+    |> Kernel.+(1420070400000)
+    |> DateTime.from_unix!(:millisecond)
   end
 
 end
