@@ -6,5 +6,5 @@ otp_release:
 cache:
   directories:
     - deps
-script: mix.coveralls.travis
+script: mix coveralls.travis
 sudo: false
