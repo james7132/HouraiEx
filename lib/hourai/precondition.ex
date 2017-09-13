@@ -27,8 +27,9 @@ defmodule Hourai.Precondition do
 
   def has_guild_permission(msg, user, permission) do
     with {:ok, guild} <- in_guild(msg),
-         {:ok, member} <- Util.get_guild_member(guild, user.id) do
+         {:ok, member} <- Util.get_guild_member(user.id, guild) do
       perms = Util.get_guild_permission(guild, member.roles)
+      IO.inspect {perms, Permissions.has_permission(perms, permission)}
       cond do
         Permissions.has_permission(perms, permission) -> {:ok, guild, member}
         true ->

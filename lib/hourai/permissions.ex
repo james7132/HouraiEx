@@ -33,21 +33,18 @@ defmodule Hourai.Permissions do
     :manage_emoji
   ]
 
-  def has_permission(permission_set, permission) do
-    permission_set &&& Enum.find_index(@permissions, permission) != 0
+  def has_permission(permission_set, permission)  do
+    index = Enum.find_index(@permissions, &Kernel.==(&1,permission))
+    mask = 1 <<< index
+    has_perm = (permission_set &&& mask) != 0
+    case permission do
+      :administrator -> has_perm
+      _ -> has_perm or has_permission(permission_set, :administrator)
+    end
   end
 
   def get_permissions(permissions) do
-    get_perms(permissions, @permissions, [])
+    Enum.filter(@permissions, &has_permission(permissions, &1))
   end
-
-  defp get_perms(permissions, [current | rest], perm_list) do
-    perm_list = if (permissions &&& 1) == 0, do: perm_list ++ [current], else: perm_list
-    get_perms(permissions >>> 1, rest, perm_list)
-  end
-
-  defp get_perms(0, _, perm_list) do perm_list end
-
-  defp get_perms(_, [], perm_list) do perm_list end
 
 end
