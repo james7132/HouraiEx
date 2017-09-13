@@ -1,13 +1,15 @@
 defmodule Hourai.CommandParser do
 
   alias Nostrum.Struct.Guild
+  alias Nostrum.Struct.Guild.Member
+  alias Nostrum.Struct.User
   alias Nostrum.Cache.UserCache
 
-  @id ~r/(?<id>\d+)/iu
-  @regex_user_mention ~r/\<@(?<id>\d+)\>/iu
-  @regex_nickname_mention ~r/\<@!(?<id>\d+)\>/iu
-  @regex_channel_mention ~r/\<#(?<id>\d+)\>/iu
-  @regex_role_mention ~r/\<@&(?<id>\d+)\>/iu
+  @id ~r/^(?<id>\d+)$/iu
+  @regex_user_mention ~r/^\<@(?<id>\d+)\>$/iu
+  @regex_nickname_mention ~r/^\<@!(?<id>\d+)\>$/iu
+  @regex_channel_mention ~r/^\<#(?<id>\d+)\>$/iu
+  @regex_role_mention ~r/^\<@&(?<id>\d+)\>$/iu
 
   def split(msg) when is_binary(msg) do
     {result, _} =
@@ -25,54 +27,57 @@ defmodule Hourai.CommandParser do
   end
 
   def parse_role(role, %Guild{roles: roles}) when is_binary(role) do
-    search_fn =
-      case get_id(role, [@regex_role_mention, @id]) do
-        {:ok, id} -> fn r -> r.id == id end
-        :error ->  fn r -> r.name == role end
-      end
-    case Enum.find(roles, search_fn) do
-       nil -> :error
-       role -> {:ok, role}
-    end
+    Enum.find_value(roles, search_fn(role, [@regex_role_mention, @id]))
   end
 
   def parse_channel(channel, %Guild{channels: channels}) when is_binary(channel) do
-    search_fn =
-      case get_id(channel, [@regex_channel_mention, @id]) do
-        {:ok, id} -> fn c -> c.id == id end
-        :error -> fn c -> c.name == channel end
-      end
-     case Enum.find(channels, search_fn) do
-       nil -> :error
-       role -> {:ok, role}
-     end
+    Enum.find_value(channels, search_fn(channel, [@regex_channel_mention, @id]))
   end
 
   def parse_guild_member(member, %Guild{members: members}) when is_binary(member) do
-    search_fn =
-      case get_id(member, [@regex_user_mention, @regex_nickname_mention, @id]) do
-        {:ok , id} -> fn m -> m.user.id == id end
-        :error -> fn m -> m.user.username == member or m.nick == member end
+    Enum.find_value(members,
+                    search_fn(member, [@regex_user_mention, @regex_nickname_mention, @id]))
+  end
+
+  def parse_user(user, users \\ []) when is_binary(user) do
+    case get_id(user, [@regex_user_mention, @regex_nickname_mention, @id]) do
+      {:ok, id} ->
+        Enum.find_value(users, &has_id(&1, id)) || UserCache.get(id)
+      _ ->
+        Enum.find_value(users, &has_name(&1, user))
+    end
+  end
+
+  defp has_id(obj, id) do
+    check =
+      case obj do
+        %Member{} = member -> if member.user.id == id, do: member
+        _ -> if obj.id == id, do: obj
       end
-    case Enum.find(members, search_fn) do
-      nil -> :error
-      member -> {:ok, member}
+    if check, do: obj
+  end
+
+  defp has_name(obj, name) do
+    check =
+      case obj do
+        %User{} = user -> user.username == name
+        %Member{} = member -> member.nick == name || has_name(member.user, name)
+        _ -> obj.name == name
+      end
+    if check, do: obj
+  end
+
+  defp search_fn(name, regexes) do
+    case get_id(name, regexes) do
+      nil -> &has_name(&1, name)
+      {:ok , id} -> &has_id(&1, id)
     end
   end
 
-  def parse_user(user) when is_binary(user) do
-    with {:ok, id} <- get_id(user, [@regex_user_mention, @regex_nickname_mention, @id]) do
-       UserCache.get(id)
-    end
-  end
-
-  defp get_id(target, regexes) do
-    case Enum.find(regexes, &Regex.match?(&1, target)) do
-      nil -> :error
-      regex ->
-         %{"id" => id_string} = Regex.named_captures(regex, target)
-         {id, _} = Integer.parse(id_string)
-         {:ok, id}
+  defp get_id(opt, regexes) do
+    with %{"id" => id_string} <- Enum.find_value(regexes, &Regex.named_captures(&1, opt)) do
+      {id, _} = Integer.parse(id_string)
+      {:ok, id}
     end
   end
 

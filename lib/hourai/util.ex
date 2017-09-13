@@ -2,6 +2,7 @@ defmodule Hourai.Util do
 
   use Bitwise
 
+  alias Hourai.CommandParser
   alias Nostrum.Api
 
   def reply(content, msg) do
@@ -34,10 +35,18 @@ defmodule Hourai.Util do
     end
   end
 
-  def get_default_target_user(msg) do
-    case Enum.at(msg.mentions, 0) do
-      nil -> msg.author
-      user -> user
+  def get_default_target_user(msg, users \\ [], opts \\ []) do
+    result =
+      opts
+      |> Stream.map(&CommandParser.parse_user(&1, users))
+      |> Enum.find(&match?({:ok, _}, &1))
+    case result do
+      nil ->
+        case Enum.at(msg.mentions, 0) do
+          nil -> msg.author
+          user -> user
+        end
+      {:ok, user} -> user
     end
   end
 

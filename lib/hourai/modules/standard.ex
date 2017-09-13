@@ -1,10 +1,13 @@
 defmodule Hourai.Commands.Standard do
 
+  alias Hourai.CommandParser
   alias Hourai.Constants
   alias Hourai.Permissions
   alias Hourai.Precondition
   alias Hourai.Util
   alias Nostrum.Cache
+  alias Nostrum.Struct.Guild
+  alias Nostrum.Struct.Guild.Member
 
   def server_permissions(msg) do
     with {:ok, guild} <- Precondition.in_guild(msg) do
@@ -52,52 +55,65 @@ defmodule Hourai.Commands.Standard do
     end
   end
 
-  def whois(msg) do
-    user = Util.get_default_target_user(msg)
-    member =
-      with {:ok, guild} <- Cache.Guild.GuildServer.get(channel_id: msg.channel_id),
-           {:ok, guild_member} <- Util.get_guild_member(user.id, guild) do
-         roles = Util.get_roles(guild, guild_member.roles)
-                 |> Enum.reject(fn r -> String.contains?(r.name, "everyone") end)
-         {:ok, guild_member, roles}
-      end
-
-    username = "Username: `#{Util.id_string(user)}`"
-    created_on = "Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`"
-    avatar = Constants.get_avatar_url(user)
-    case member do
-      {:ok, guild_member, roles} ->
-        [
-          username,
-          case Map.get(guild_member, :nick) do
-            nil -> nil
-            nick -> "Nickname: `#{nick}`"
-          end,
-          created_on,
-          case Map.get(guild_member, :joined_at) do
-            nil -> nil
-            joined_at ->
-              {:ok, join_date, _} = DateTime.from_iso8601(joined_at)
-              "Joined on: `#{DateTime.to_string(join_date)}`"
-          end,
-          case roles do
-            nil -> nil
-            role_list -> "Roles: #{Util.codify_list(role_list, fn r -> r.name end)}"
-          end,
-          avatar
-        ]
-      {:error, _} -> [username, created_on, avatar]
+  def whois(msg, options) do
+    case Cache.Guild.GuildServer.get(channel_id: msg.channel_id) do
+      {:ok, guild} -> whois_guild_member(msg, options, guild)
+      _ -> whois_generic(msg, options)
     end
-    |> Enum.filter(fn x -> x != nil end)
-    |> Enum.join("\n")
+  end
+
+  defp whois_guild_member(msg, options, %Guild{} = guild) do
+    user = Util.get_default_target_user(msg, guild.members, options)
+    with {:ok, guild_member} <- Util.get_guild_member(user.id, guild) do
+      roles = Util.get_roles(guild, guild_member.roles)
+              |> Enum.reject(&String.contains?(&1.name, "everyone"))
+      ["""
+       Username: `#{Util.id_string(user)}`
+       Nickname: `#{guild_member.nick || "N/A"}`
+       Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`
+       Joined on: `#{get_joined_at_date(guild_member)}`
+       """,
+       case roles do
+         nil -> nil
+         role_list -> "Roles: #{Util.codify_list(role_list, fn r -> r.name end)}"
+       end,
+       Constants.get_avatar_url(user)]
+       |> join_truthy("\n")
+       |> Util.reply(msg)
+    end
+  end
+
+  defp whois_generic(msg, options) do
+    user = Util.get_default_target_user(msg, [], options)
+    """
+    Username: `#{Util.id_string(user)}`
+    Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`
+    #{Constants.get_avatar_url(user)}
+    """
     |> Util.reply(msg)
   end
 
-  def avatar(msg) do
-    msg.mentions
+  defp get_joined_at_date(%Member{joined_at: join_date}) do
+    case join_date do
+      nil -> "N/A"
+      _ ->
+        {:ok, date, _} = DateTime.from_iso8601(join_date)
+        DateTime.to_string(date)
+    end
+  end
+
+  defp join_truthy(enum, seperator) do
+    enum
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(fn x -> x end)
+    |> Enum.join(seperator)
+  end
+
+  def avatar(msg, options) do
+    options
+    |> Enum.map(&CommandParser.parse_user/1)
     |> Enum.map(&Constants.get_avatar_url(&1))
-    |> Enum.filter(fn a -> a != nil end)
-    |> Enum.join("\n")
+    |> join_truthy("\n")
     |> Util.reply(msg)
   end
 

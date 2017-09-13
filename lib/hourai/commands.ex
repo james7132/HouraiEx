@@ -50,28 +50,28 @@ defmodule Hourai.Commands do
     |> execute(msg)
   end
 
-  def execute(["kick"| _], msg) do
-    Admin.kick(msg)
+  def execute(["kick" | options], msg) do
+    Admin.kick(msg, options)
   end
 
-  def execute(["mute"| _], msg) do
-    Admin.set_mute(msg, true)
+  def execute(["mute"| options], msg) do
+    Admin.set_mute(msg, true, options)
   end
 
-  def execute(["unmute"| _], msg) do
-    Admin.set_mute(msg, false)
+  def execute(["unmute" | options], msg) do
+    Admin.set_mute(msg, false, options)
   end
 
-  def execute(["deafen"| _], msg) do
-    Admin.set_deaf(msg, true)
+  def execute(["deafen" | options], msg) do
+    Admin.set_deaf(msg, true, options)
   end
 
-  def execute(["undeafen"| _], msg) do
-    Admin.set_deaf(msg, false)
+  def execute(["undeafen" | options], msg) do
+    Admin.set_deaf(msg, false, options)
   end
 
-  def execute(["avatar"| _], msg) do
-    Standard.avatar(msg)
+  def execute(["avatar" | options], msg) do
+    Standard.avatar(msg, options)
   end
 
   def execute(["choose" | options], msg) do
@@ -94,8 +94,8 @@ defmodule Hourai.Commands do
     Standard.serverinfo(msg)
   end
 
-  def execute(["whois" | _], msg) do
-    Standard.whois(msg)
+  def execute(["whois" | options], msg) do
+    Standard.whois(msg, options)
   end
 
   def execute(["server", "permissions" | _], msg) do
@@ -143,4 +143,5 @@ defmodule Hourai.Commands do
       Util.reply(command.response, msg)
     end
   end
+
 end
