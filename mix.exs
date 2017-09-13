@@ -7,29 +7,19 @@ defmodule Hourai.Mixfile do
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
+     aliases: aliases(),
      deps: deps()]
   end
 
-  # Configuration for the OTP application
-  #
-  # Type "mix help compile.app" for more information
+  # Applicationss as a part of the project
   def application do
-    # Specify extra applications you'll use from Erlang/Elixir
     [
       extra_applications: [:logger],
       mod: {Hourai, []}
     ]
   end
 
-  # Dependencies can be Hex packages:
-  #
-  #   {:my_dep, "~> 0.3.0"}
-  #
-  # Or git/path repositories:
-  #
-  #   {:my_dep, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
-  #
-  # Type "mix help deps" for more examples and options
+  # Dependencies
   defp deps do
     [
       {:nostrum, git: "https://github.com/Kraigie/nostrum.git"},
@@ -38,4 +28,12 @@ defmodule Hourai.Mixfile do
       {:ecto_enum, "~> 1.0"}
     ]
   end
+
+  defp aliases do
+    [
+      # This avoids running the actual full application when tests are run
+      test: "test --no-start"
+    ]
+  end
+
 end
