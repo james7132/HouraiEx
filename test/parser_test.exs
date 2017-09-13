@@ -72,18 +72,18 @@ defmodule ParserTest do
   test "parse_channel works on ids" do
     channel = %Channel{ id: 274989267086868480 }
     guild = %Guild{ channels: [channel] }
-    assert CommandParser.parse_channel("274989267086868480", guild) == {:ok, channel}
+    assert CommandParser.parse_channel("274989267086868480", guild) == channel
   end
 
   test "parse_member works on ids" do
     member = %Member{ user: %User{ id: 274989267086868480 }}
     guild = %Guild{ members: [member] }
-    assert CommandParser.parse_guild_member("274989267086868480", guild) == {:ok, member}
+    assert CommandParser.parse_guild_member("274989267086868480", guild) == member
   end
 
   test "parse_role works on ids" do
     role = %Role{ id: 274989267086868480 }
     guild = %Guild{ roles: [role] }
-    assert CommandParser.parse_role("&274989267086868480", guild) == {:ok, role}
+    assert CommandParser.parse_role("&274989267086868480", guild) == role
   end
 end
