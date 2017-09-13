@@ -1,6 +1,6 @@
 defmodule Hourai.Commands do
 
-  alias Hourai.Util
+  alias Hourai.CommandParser
   alias Hourai.Schema.Discord.CustomCommand
   alias Hourai.Schema.Discord.BlacklistedUser
   alias Hourai.Commands.Admin
@@ -9,6 +9,7 @@ defmodule Hourai.Commands do
   alias Hourai.Commands.Owner
   alias Hourai.Commands.Standard
   alias Hourai.Repo
+  alias Hourai.Util
   alias Nostrum.Cache
 
   require Logger
@@ -45,7 +46,7 @@ defmodule Hourai.Commands do
   def execute(command, msg) when is_binary(command) do
     command
     |> String.trim
-    |> String.split
+    |> CommandParser.split
     |> execute(msg)
   end
 
