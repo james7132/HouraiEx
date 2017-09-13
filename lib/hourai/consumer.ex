@@ -12,8 +12,7 @@ defmodule Hourai.Consumer do
     Commands.handle_message(msg)
   end
 
-  def handle_event(event) do
-    #IO.inspect  event
+  def handle_event(_) do
     :noop
   end
 

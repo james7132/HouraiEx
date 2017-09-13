@@ -53,6 +53,22 @@ defmodule Hourai.Commands do
     Admin.kick(msg)
   end
 
+  def execute(["mute"| _], msg) do
+    Admin.set_mute(msg, true)
+  end
+
+  def execute(["unmute"| _], msg) do
+    Admin.set_mute(msg, false)
+  end
+
+  def execute(["deafen"| _], msg) do
+    Admin.set_deaf(msg, true)
+  end
+
+  def execute(["undeafen"| _], msg) do
+    Admin.set_deaf(msg, false)
+  end
+
   def execute(["avatar"| _], msg) do
     Standard.avatar(msg)
   end
