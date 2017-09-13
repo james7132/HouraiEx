@@ -7,6 +7,7 @@ defmodule Hourai.Mixfile do
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
+     deps: deps(),
      test_coverage: [tool: ExCoveralls],
      preferred_cli_env: [
        "coveralls": :test,
@@ -14,8 +15,7 @@ defmodule Hourai.Mixfile do
        "coveralls.post": :test,
        "coveralls.html": :test,
      ],
-     aliases: aliases(),
-     deps: deps()]
+     aliases: aliases()]
   end
 
   # Applicationss as a part of the project
