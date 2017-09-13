@@ -7,6 +7,13 @@ defmodule Hourai.Mixfile do
      elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
+     test_coverage: [tool: ExCoveralls],
+     preferred_cli_env: [
+       "coveralls": :test,
+       "coveralls.detail": :test,
+       "coveralls.post": :test,
+       "coveralls.html": :test,
+     ],
      aliases: aliases(),
      deps: deps()]
   end
@@ -25,7 +32,8 @@ defmodule Hourai.Mixfile do
       {:nostrum, git: "https://github.com/Kraigie/nostrum.git"},
       {:postgrex, ">= 0.0.0"},
       {:ecto, "~> 2.1"},
-      {:ecto_enum, "~> 1.0"}
+      {:ecto_enum, "~> 1.0"},
+      {:excoveralls, "~> 0.7", only: :test}
     ]
   end
 
