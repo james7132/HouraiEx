@@ -11,10 +11,10 @@ defmodule ParserTest do
 
   defp member() do
     %Member{
-      nick: "GeorgePBurdell"
+      nick: "GeorgePBurdell",
       user: %User{
         username: "ThatAintFalco",
-        id: 274989267086868480
+        id: 89084521336541184
     }}
   end
 
@@ -34,9 +34,9 @@ defmodule ParserTest do
 
   defp guild() do
     %Guild{
-      roles: [build_role()]
-      channels: [build_channel()]
-      members: [build_member()]
+      roles: [role()],
+      channels: [channel()],
+      members: [member()]
     }
   end
 
@@ -53,16 +53,20 @@ defmodule ParserTest do
       ["Test", "20", "1  2  6", "200", "42    56"]
   end
 
+  test "parse_tag passes the tag along if it doesn't match" do
+    assert CommandParser.parse_tag("Unmatched Tag", guild()) == "Unmatched Tag"
+  end
+
   test "parse_tag works on channel names" do
-    assert CommandParser.parse_tag("bot-stuff", guild()) == channe()
+    assert CommandParser.parse_tag("bot-stuff", guild()) == channel()
   end
 
   test "parse_tag works on usernames" do
-    assert CommandParser.parse_tag("GeorgePBurdell", guild()) == member()
+    assert CommandParser.parse_tag("ThatAintFalco", guild()) == member()
   end
 
   test "parse_tag works on user nicknames" do
-    assert CommandParser.parse_tag("Reimu Hakurei", guild()) == member()
+    assert CommandParser.parse_tag("GeorgePBurdell", guild()) == member()
   end
 
   test "parse_tag works on role names" do
@@ -74,15 +78,15 @@ defmodule ParserTest do
   end
 
   test "parse_tag works on user mentions" do
-    assert CommandParser.parse_tag("<@274989267086868480>", guild) == member
+    assert CommandParser.parse_tag("<@89084521336541184>", guild()) == member()
   end
 
   test "parse_tag works on user nickname mentions" do
-    assert CommandParser.parse_tag("<@!274989267086868480>", guild) == member
+    assert CommandParser.parse_tag("<@89084521336541184>", guild()) == member()
   end
 
   test "parse_tag works on role mentions" do
-    assert CommandParser.parse_tag("<@&274989267086868480>", guild) == role
+    assert CommandParser.parse_tag("<@&274989267086868480>", guild()) == role()
   end
 
   test "parse_tag works on channel ids" do
@@ -90,7 +94,7 @@ defmodule ParserTest do
   end
 
   test "parse_tag works on user ids" do
-    assert CommandParser.parse_tag("274989267086868480", guild()) == member()
+    assert CommandParser.parse_tag("89084521336541184", guild()) == member()
   end
 
   test "parse_tag works on role ids" do
@@ -98,15 +102,15 @@ defmodule ParserTest do
   end
 
   test "parse_channel works on names" do
-    assert CommandParser.parse_channel("bot-stuff", guild()) == channe()
+    assert CommandParser.parse_channel("bot-stuff", guild()) == channel()
   end
 
   test "parse_member works on usernames" do
-    assert CommandParser.parse_guild_member("GeorgePBurdell", guild()) == member()
+    assert CommandParser.parse_guild_member("ThatAintFalco", guild()) == member()
   end
 
   test "parse_member works on nicknames" do
-    assert CommandParser.parse_guild_member("Reimu Hakurei", guild()) == member()
+    assert CommandParser.parse_guild_member("GeorgePBurdell", guild()) == member()
   end
 
   test "parse_role works on role names" do
@@ -118,15 +122,15 @@ defmodule ParserTest do
   end
 
   test "parse_member works on mentions" do
-    assert CommandParser.parse_guild_member("<@274989267086868480>", guild) == member
+    assert CommandParser.parse_guild_member("<@89084521336541184>", guild()) == member()
   end
 
   test "parse_member works on nickname mentions" do
-    assert CommandParser.parse_guild_member("<@!274989267086868480>", guild) == member
+    assert CommandParser.parse_guild_member("<@!89084521336541184>", guild()) == member()
   end
 
   test "parse_role works on mentions" do
-    assert CommandParser.parse_role("<@&274989267086868480>", guild) == role
+    assert CommandParser.parse_role("<@&274989267086868480>", guild()) == role()
   end
 
   test "parse_channel works on ids" do
@@ -134,7 +138,7 @@ defmodule ParserTest do
   end
 
   test "parse_member works on ids" do
-    assert CommandParser.parse_guild_member("274989267086868480", guild()) == member()
+    assert CommandParser.parse_guild_member("89084521336541184", guild()) == member()
   end
 
   test "parse_role works on ids" do
