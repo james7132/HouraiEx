@@ -26,6 +26,13 @@ defmodule Hourai.CommandParser do
     Enum.reverse(result)
   end
 
+  def parse_tag(tag, %Guild{} = guild) when is_binary(role) do
+    parse_role(tag, guild) ||
+      parse_channel(tag, guild) ||
+      parse_guild_member(tag, guild) ||
+      tag
+  end
+
   def parse_role(role, %Guild{roles: roles}) when is_binary(role) do
     Enum.find_value(roles, search_fn(role, [@regex_role_mention, @id]))
   end
