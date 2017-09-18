@@ -6,7 +6,8 @@ defmodule Hourai.Commands.Custom do
   alias Hourai.Repo
   alias Hourai.Schema.Discord.CustomCommand
 
-  @command_doc"""
+  command "command", help:
+  """
   Creates, updates, or deletes custom commnands.
   First argument is always the name of the command, rest of the command is the expected response.
 
@@ -16,7 +17,7 @@ defmodule Hourai.Commands.Custom do
   `~command hello Hello world! => Creates/updates command "hello" with response "Hello world!"`
   `~command hello => Deletes command "hello"`
   """
-  command "command" do
+  do
     case context.args do
       [name] -> delete_command(context, name)
       [name | args] -> add_or_update_command(context, name, args)

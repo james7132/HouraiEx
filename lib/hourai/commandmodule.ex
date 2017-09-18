@@ -27,9 +27,7 @@ defmodule Hourai.CommandModule do
           name: @name,
           prefix: @prefix,
           module: __MODULE__,
-          commands:
-            for {func, opts} <- @commands  do:
-              {func, Enum.into(opts, %{})},
+          commands: @commands,
           help: @command_doc,
           submodules: Enum.map(@submodules, fn submodule ->
             submodule.module_descriptor()
@@ -42,6 +40,7 @@ defmodule Hourai.CommandModule do
   defmacro command(name, opts \\ [], do: expression) do
     function_name = String.to_atom(name)
     quote do
+      @doc unquote(Keyword.get(opts, :help) || false)
       @commands [{unquote(function_name), unquote(opts)}] ++ @commands
       def unquote(function_name)(unquote_splicing([{:context, [], nil}])) do
         unquote(expression)

@@ -38,7 +38,7 @@ defmodule Hourai.CommandService do
           |> Enum.map(fn module ->
             descriptor = module.module_descriptor()
             IO.inspect descriptor.help
-            commands = for cmd <- descriptor.commands, do: Atom.to_string(cmd)
+            commands = for {cmd, _} <- descriptor.commands, do: Atom.to_string(cmd)
             submodules = for sub <- descriptor.submodules, do: "#{sub.prefix}*"
             "**#{descriptor.name}**: #{
               commands ++ submodules
@@ -76,10 +76,9 @@ defmodule Hourai.CommandService do
   end
 
   defp create_matched_execute(prefix, module, {func, opts}) do
-    IO.inspect opts
     command_name = prefix ++ [Atom.to_string(func)]
     full_name = Enum.join(command_name, " ")
-    help = Keyword.get(opts, :help) || "`~#{full_name}`"
+    help = "`~#{full_name}`\n" <> (Keyword.get(opts, :help) || "")
     IO.puts("Compiling matcher for command \"#{full_name}\"...")
     quote do
       def execute([unquote_splicing(command_name) | args], msg) do
