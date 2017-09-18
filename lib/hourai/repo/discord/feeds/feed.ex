@@ -5,7 +5,7 @@ defmodule Hourai.Schema.Discord.Feed do
     field :feed_url, :string
     has_many :channels, Hourai.Discord.FeedChannel
 
-    timestamps
+    timestamps()
   end
 
 end

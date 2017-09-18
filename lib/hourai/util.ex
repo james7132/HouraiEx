@@ -78,10 +78,10 @@ defmodule Hourai.Util do
     |> codify_list(fn c -> c.name end)
   end
 
-  def codify_list(list, str_fn \\ fn x -> x end) do
+  def codify_list(list, str_fn \\ fn x -> x end, sep \\ ", ") do
     list
     |> Enum.map(fn val -> "`#{str_fn.(val)}`" end)
-    |> Enum.join(", ")
+    |> Enum.join(sep)
   end
 
   def id_string(user) do

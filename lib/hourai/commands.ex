@@ -1,33 +1,122 @@
-defmodule Hourai.Commands do
+defmodule Hourai.CommandService do
 
   alias Hourai.CommandParser
-  alias Hourai.Schema.Discord.CustomCommand
+  alias Hourai.Util
+
+  defmacro __using__(_) do
+    [quote do
+      @before_compile Hourai.CommandService
+    end] ++
+    Enum.map(Application.get_env(:hourai, :root_modules), fn module ->
+      quote do
+        require unquote(module)
+      end
+    end)
+  end
+
+  defmacro __before_compile__(_) do
+    Enum.map(Application.get_env(:hourai, :root_modules), fn module ->
+      quote_module_commands(module.module_descriptor(), [])
+    end) ++
+    [quote do
+      def execute(command, msg) when is_binary(command) do
+        command |> String.trim |> CommandParser.split |> execute(msg)
+      end
+
+      def execute(["help" | args], msg) do
+        help(args, msg)
+      end
+
+      def help(command, msg) when is_binary(command) do
+        command |> String.trim |> CommandParser.split |> help(msg)
+      end
+
+      # General Help
+      def help([],  msg) do
+        modules =
+          Application.get_env(:hourai, :root_modules)
+          |> Enum.map(fn module ->
+            descriptor = module.module_descriptor()
+            IO.inspect descriptor.help
+            commands = for cmd <- descriptor.commands, do: Atom.to_string(cmd)
+            submodules = for sub <- descriptor.submodules, do: "#{sub.prefix}*"
+            "**#{descriptor.name}**: #{
+              commands ++ submodules
+              |> Util.codify_list()
+            }"
+          end)
+        Nostrum.Api.create_message(msg.channel_id,
+        """
+        Available Commands:
+        #{Enum.join(modules, "\n")}
+        Use `~help <command>` for more information on individual commands.
+        """)
+      end
+
+      # Must be defined last as a catch-all
+      def execute(args, msg) do
+        handle_event({:invalid_command, {args, msg}})
+      end
+
+      def help(_, msg) do
+        Nostrum.Api.create_message(msg.channel_id, "Unknown command.")
+      end
+    end]
+  end
+
+  defp quote_module_commands(descriptor, prefix) do
+    module_prefix = Map.get(descriptor, :prefix)
+    prefix_list = if module_prefix, do: prefix ++ [module_prefix], else: prefix
+    commands = Enum.map(descriptor.commands,
+                        &create_matched_execute(prefix_list, descriptor.module,
+                                                &1))
+    submodule_commands = Enum.map(descriptor.submodules,
+                                  &quote_module_commands(&1, prefix_list))
+    commands ++ submodule_commands
+  end
+
+  defp create_matched_execute(prefix, module, {func, opts}) do
+    IO.inspect opts
+    command_name = prefix ++ [Atom.to_string(func)]
+    full_name = Enum.join(command_name, " ")
+    help = Keyword.get(opts, :help) || "`~#{full_name}`"
+    IO.puts("Compiling matcher for command \"#{full_name}\"...")
+    quote do
+      def execute([unquote_splicing(command_name) | args], msg) do
+        unquote(module).unquote(func)(%{msg: msg, args: args})
+      end
+
+      def help([unquote_splicing(command_name) | _], msg) do
+        Nostrum.Api.create_message(msg.channel_id, unquote(help))
+      end
+    end
+  end
+
+end
+
+defmodule Hourai.Commands do
+
+  use Hourai.CommandService
+
+  #alias Hourai.Schema.Discord.CustomCommand
   alias Hourai.Schema.Discord.BlacklistedUser
-  alias Hourai.Commands.Admin
-  alias Hourai.Commands.Custom
-  alias Hourai.Commands.Misc
-  alias Hourai.Commands.Owner
-  alias Hourai.Commands.Standard
   alias Hourai.Repo
   alias Hourai.Util
-  alias Nostrum.Cache
+  alias Nostrum.Cache.Guild.GuildServer
 
   require Logger
 
   @prefix "~"
 
   defp parse_comment(msg) do
-    case String.trim(msg.content) do
+    case  String.trim(msg.content) do
       @prefix <> content -> {:ok, content}
-      _ -> {:error, "No command prefix"}
+      _ -> {:not_command, "No command prefix"}
     end
   end
 
   defp is_valid_command(msg) do
-    case Repo.get(BlacklistedUser, msg.author.id) do
-      nil -> :ok
-      _ -> {:error, "Blacklisted user"}
-    end
+    Repo.get(BlacklistedUser, msg.author.id) || :ok
   end
 
   def handle_message(msg) do
@@ -35,112 +124,27 @@ defmodule Hourai.Commands do
       with {:ok, command} <- parse_comment(msg),
            :ok <- is_valid_command(msg) do
         execute(command, msg)
+        :ok
       end
     end
-    if result != :ok do
-      Logger.info "Executed command '#{msg.content}' in #{time} μs"
+    case result do
+      :ok -> Logger.info "Executed command '#{msg.content}'. Time: #{time} μs"
+      {:error, error} ->
+        Logger.error "Failed command: '#{msg.content}'. Error: '#{error}'. Time: #{time} μs"
+      _ -> :noop
     end
-    # Send message and command handling time to monitoring
   end
 
-  def execute(command, msg) when is_binary(command) do
-    command
-    |> String.trim
-    |> CommandParser.split
-    |> execute(msg)
+  def handle_event({:invalid_command, {args, msg}}) do
+    custom_command(args, msg)
   end
 
-  def execute(["kick" | options], msg) do
-    Admin.kick(msg, options)
-  end
-
-  def execute(["mute"| options], msg) do
-    Admin.set_mute(msg, true, options)
-  end
-
-  def execute(["unmute" | options], msg) do
-    Admin.set_mute(msg, false, options)
-  end
-
-  def execute(["deafen" | options], msg) do
-    Admin.set_deaf(msg, true, options)
-  end
-
-  def execute(["undeafen" | options], msg) do
-    Admin.set_deaf(msg, false, options)
-  end
-
-  def execute(["avatar" | options], msg) do
-    Standard.avatar(msg, options)
-  end
-
-  def execute(["choose" | options], msg) do
-    Standard.choose(options, msg)
-  end
-
-  def execute(["echo" | options], msg) do
-    Standard.echo(msg, options)
-  end
-
-  def execute(["hash", alg | options], msg) do
-    Standard.hash(msg, alg, options)
-  end
-
-  def execute(["invite" | _], msg) do
-    Standard.invite(msg)
-  end
-
-  def execute(["serverinfo"], msg) do
-    Standard.serverinfo(msg)
-  end
-
-  def execute(["whois" | options], msg) do
-    Standard.whois(msg, options)
-  end
-
-  def execute(["server", "permissions" | _], msg) do
-    Standard.server_permissions(msg)
-  end
-
-  # Nitori Misc Commands
-  def execute(["lmgtfy" | options], msg) do
-    Misc.lmgtfy(msg, options)
-  end
-
-  def execute(["shrug" | _], msg) do
-    Misc.shrug(msg)
-  end
-
-  def execute(["blah" | _], msg) do
-    Misc.blah(msg)
-  end
-
-  def execute(["lenny" | _], msg) do
-    Misc.lenny(msg)
-  end
-
-  def execute(["8ball" | _], msg) do
-    Misc.eight_ball(msg)
-  end
-
-  # Blacklist commands
-  def execute(["blacklist", "user", change | _], msg) do
-    Owner.blacklist_user(msg, change)
-  end
-
-  # Custom commands
-  def execute(["command", name], msg) do
-    Custom.delete_command(msg, name)
-  end
-
-  def execute(["command", name | response], msg) do
-    Custom.add_or_update_command(msg, name, response)
-  end
-
-  def execute([prefix | _], msg) do
-    with {:ok, guild} <- Cache.Guild.GuildServer.get(channel_id: msg.channel_id),
-          command when not is_nil(command)  <- Repo.get_by(CustomCommand, guild_id: guild.id, name: prefix) do
-      Util.reply(command.response, msg)
+  def custom_command([prefix | _], msg) do
+    with {:ok, guild} <- GuildServer.get(channel_id: msg.channel_id) do
+      command = Repo.get_by(CustomCommand, guild_id: guild.id, name: prefix)
+      if command do
+        Util.reply(command.response, msg)
+      end
     end
   end
 

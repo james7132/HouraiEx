@@ -1,12 +1,30 @@
 defmodule Hourai.Commands.Custom do
 
+  use Hourai.CommandModule
+
   alias Hourai.Precondition
   alias Hourai.Repo
-  alias Hourai.Util
   alias Hourai.Schema.Discord.CustomCommand
 
-  def add_or_update_command(msg, name, response) do
-    with {:ok, guild} <- Precondition.in_guild(msg) do
+  @command_doc"""
+  Creates, updates, or deletes custom commnands.
+  First argument is always the name of the command, rest of the command is the expected response.
+
+  Calling the command with only the name will delete the command.
+
+  Examples:
+  `~command hello Hello world! => Creates/updates command "hello" with response "Hello world!"`
+  `~command hello => Deletes command "hello"`
+  """
+  command "command" do
+    case context.args do
+      [name] -> delete_command(context, name)
+      [name | args] -> add_or_update_command(context, name, args)
+    end
+  end
+
+  def add_or_update_command(context, name, response) do
+    with {:ok, guild} <- Precondition.in_guild(context.msg) do
       result = %CustomCommand{}
                 |> CustomCommand.changeset(%{
                   guild_id: guild.id,
@@ -16,21 +34,21 @@ defmodule Hourai.Commands.Custom do
                 |> Repo.insert_or_update
       case result do
         {:ok, model} ->
-          Util.reply("Command `#{model.name}` created with response \"#{model.response}\"", msg)
+          reply(context, "Command `#{model.name}` created with response \"#{model.response}\"")
         {:error, error} ->
-          Util.reply("Something went wrong: '#{error}'", msg)
+          reply(context, "Something went wrong: '#{error}'")
       end
     end
   end
 
-  def delete_command(msg, name) do
-    with {:ok, guild} <- Precondition.in_guild(msg) do
+  def delete_command(context, name) do
+    with {:ok, guild} <- Precondition.in_guild(context.msg) do
       case Repo.get_by(CustomCommand, guild_id: guild.id, name: name) do
         nil ->
-          Util.reply("Command `#{name}` does not exist!", msg)
+          reply(context, "Command `#{name}` does not exist!")
         command ->
           Repo.delete(command)
-          Util.reply("Command `#{name}` successfully deleted.", msg)
+          reply(context, "Command `#{name}` successfully deleted.")
       end
     end
   end

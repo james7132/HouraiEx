@@ -1,5 +1,7 @@
 defmodule Hourai.Commands.Standard do
 
+  use Hourai.CommandModule
+
   alias Hourai.CommandParser
   alias Hourai.Constants
   alias Hourai.Permissions
@@ -9,9 +11,119 @@ defmodule Hourai.Commands.Standard do
   alias Nostrum.Struct.Guild
   alias Nostrum.Struct.Guild.Member
 
-  def server_permissions(msg) do
-    with {:ok, guild} <- Precondition.in_guild(msg) do
-      user = Util.get_default_target_user(msg)
+  submodule Hourai.Commands.Standard.Hash
+  submodule Hourai.Commands.Standard.Server
+
+  command "echo", do: reply(context, Enum.join(context.args, " "))
+
+  command "whois" do
+    case Cache.Guild.GuildServer.get(channel_id: context.msg.channel_id) do
+      {:ok, guild} -> whois_guild_member(context, guild)
+      _ -> whois_generic(context)
+    end
+  end
+
+  defp whois_guild_member(context,  %Guild{} = guild) do
+    user = Util.get_default_target_user(context, guild.members)
+    with {:ok, guild_member} <- Util.get_guild_member(user.id, guild) do
+      roles = Util.get_roles(guild, guild_member.roles)
+              |> Enum.reject(&String.contains?(&1.name, "everyone"))
+      response =
+        ["""
+         Username: `#{Util.id_string(user)}`
+         Nickname: `#{guild_member.nick || "N/A"}`
+         Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`
+         Joined on: `#{get_joined_at_date(guild_member)}`
+         """,
+         case roles do
+           nil -> nil
+           role_list -> "Roles: #{Util.codify_list(role_list, fn r -> r.name end)}"
+         end,
+         Constants.get_avatar_url(user)]
+         |> join_truthy("\n")
+       reply(context, response)
+    end
+  end
+
+  defp whois_generic(context) do
+    user = Util.get_default_target_user(context, [])
+    reply(context,
+    """
+    Username: `#{Util.id_string(user)}`
+    Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`
+    #{Constants.get_avatar_url(user)}
+    """)
+  end
+
+  defp get_joined_at_date(%Member{joined_at: join_date}) do
+    case join_date do
+      nil -> "N/A"
+      _ ->
+        {:ok, date, _} = DateTime.from_iso8601(join_date)
+        DateTime.to_string(date)
+    end
+  end
+
+  defp join_truthy(enum, seperator) do
+    enum
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(fn x -> x end)
+    |> Enum.join(seperator)
+  end
+
+  command "avatar" do
+    response =
+      context.args
+      |> Enum.map(&CommandParser.parse_user/1)
+      |> Enum.map(&Constants.get_avatar_url(&1))
+      |> join_truthy("\n")
+    reply(context, response)
+  end
+
+  command "choose", do: reply(context, "I choose #{Enum.random(context.args)}!")
+
+  command "invite", do: reply(context,
+    "Use this link to add me to your server: https://discordapp.com/oauth2/authorize?client_id=208460637368614913&scope=bot&permissions=0xFFFFFFFFFFFF")
+
+end
+
+defmodule Hourai.Commands.Standard.Hash do
+
+  use Hourai.CommandModule
+
+  @prefix "hash"
+
+  command "md5", do: hash(context, :md5)
+  command "sha128", do: hash(context, :sha)
+  command "sha256", do: hash(context, :sha256)
+  command "sha512", do: hash(context, :sha512)
+
+  defp hash(context, hash_alg) do
+    response =
+      context.args
+      |> Enum.join(" ")
+      |> (&:crypto.hash(hash_alg, &1)).()
+      |> Base.encode16(case: :lower)
+    reply(context, response)
+  end
+
+end
+
+defmodule Hourai.Commands.Standard.Server do
+
+  use Hourai.CommandModule
+
+  alias Hourai.Constants
+  alias Hourai.Permissions
+  alias Hourai.Precondition
+  alias Hourai.Util
+  alias Nostrum.Cache.UserCache
+
+  @prefix "server"
+
+  command "permissions" do
+    with {:ok, guild} <- Precondition.in_guild(context.msg) do
+      user = Util.get_default_target_user(context.msg)
       with {:ok, member} <- Util.get_guild_member(user.id, guild) do
         guild
         |> Util.get_guild_permission(member.roles)
@@ -22,14 +134,14 @@ defmodule Hourai.Commands.Standard do
             |> String.replace("_", " ")
             |> String.capitalize
           end)
-        |> Util.reply(msg)
+        |> Util.reply(context.msg)
       end
     end
   end
 
-  def serverinfo(msg) do
-    with {:ok, guild} <- Precondition.in_guild(msg),
-         {:ok, owner} <- Cache.UserCache.get(id: guild.owner_id) do
+  command "info" do
+    with {:ok, guild} <- Precondition.in_guild(context.msg),
+         {:ok, owner} <- UserCache.get(id: guild.owner_id) do
       response ="""
       \nName: `#{guild.name}`
       ID: `#{guild.id}`
@@ -51,99 +163,8 @@ defmodule Hourai.Commands.Standard do
         else: response
       icon_url = Constants.guild_icon_url(guild)
       response = if icon_url, do: response <> icon_url, else: response
-      Util.reply(response, msg)
+      reply(context, response)
     end
-  end
-
-  def whois(msg, options) do
-    case Cache.Guild.GuildServer.get(channel_id: msg.channel_id) do
-      {:ok, guild} -> whois_guild_member(msg, options, guild)
-      _ -> whois_generic(msg, options)
-    end
-  end
-
-  defp whois_guild_member(msg, options, %Guild{} = guild) do
-    user = Util.get_default_target_user(msg, guild.members, options)
-    with {:ok, guild_member} <- Util.get_guild_member(user.id, guild) do
-      roles = Util.get_roles(guild, guild_member.roles)
-              |> Enum.reject(&String.contains?(&1.name, "everyone"))
-      ["""
-       Username: `#{Util.id_string(user)}`
-       Nickname: `#{guild_member.nick || "N/A"}`
-       Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`
-       Joined on: `#{get_joined_at_date(guild_member)}`
-       """,
-       case roles do
-         nil -> nil
-         role_list -> "Roles: #{Util.codify_list(role_list, fn r -> r.name end)}"
-       end,
-       Constants.get_avatar_url(user)]
-       |> join_truthy("\n")
-       |> Util.reply(msg)
-    end
-  end
-
-  defp whois_generic(msg, options) do
-    user = Util.get_default_target_user(msg, [], options)
-    """
-    Username: `#{Util.id_string(user)}`
-    Created on: `#{user.id |> Util.created_on |> DateTime.to_string}`
-    #{Constants.get_avatar_url(user)}
-    """
-    |> Util.reply(msg)
-  end
-
-  defp get_joined_at_date(%Member{joined_at: join_date}) do
-    case join_date do
-      nil -> "N/A"
-      _ ->
-        {:ok, date, _} = DateTime.from_iso8601(join_date)
-        DateTime.to_string(date)
-    end
-  end
-
-  defp join_truthy(enum, seperator) do
-    enum
-    |> Enum.map(&String.trim/1)
-    |> Enum.filter(fn x -> x end)
-    |> Enum.join(seperator)
-  end
-
-  def avatar(msg, options) do
-    options
-    |> Enum.map(&CommandParser.parse_user/1)
-    |> Enum.map(&Constants.get_avatar_url(&1))
-    |> join_truthy("\n")
-    |> Util.reply(msg)
-  end
-
-  def choose(msg, options) do
-    Util.reply("I choose #{Enum.random(options)}!", msg)
-  end
-
-  def echo(msg, options) do
-    options
-    |> Enum.join(" ")
-    |> Util.reply(msg)
-  end
-
-  def invite(msg) do
-    Util.reply("Use this link to add me to your server: https://discordapp.com/oauth2/authorize?client_id=208460637368614913&scope=bot&permissions=0xFFFFFFFFFFFF", msg)
-  end
-
-  def hash(msg, alg, options) do
-    hash_alg =
-      case alg do
-        "md5" -> :md5
-        "sha128" -> :sha
-        "sha256" -> :sha256
-        "sha512" -> :sha512
-      end
-    options
-    |> Enum.join(" ")
-    |> (&:crypto.hash(hash_alg, &1)).()
-    |> Base.encode16(case: :lower)
-    |> Util.reply(msg)
   end
 
 end

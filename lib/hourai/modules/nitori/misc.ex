@@ -1,4 +1,6 @@
-defmodule Hourai.Commands.Misc do
+defmodule Hourai.Commands.Nitori.Misc do
+
+  use Hourai.CommandModule
 
   alias Hourai.Util
 
@@ -34,24 +36,15 @@ defmodule Hourai.Commands.Misc do
     "Why not?"
   ]
 
-  def lmgtfy(msg, options) do
-    Util.reply("https://lmgtfy.com/?q=#{options |> Enum.join(" ") |> URI.encode}", msg);
-  end
+  command "lmgtfy", do:
+    reply(context,
+          "https://lmgtfy.com/?q=#{context.args |> Enum.join(" ") |> URI.encode}");
 
-  def shrug(msg) do
-    Util.reply("¯\\\\\\\_(ツ)_/¯", msg);
-  end
+  command "shrug", do: reply(context, "¯\\\\\\\_(ツ)_/¯")
+  command "blah", do: reply(context,
+                            "Blah to you too, #{Util.mention(context.msg.author)}.")
 
-  def blah(msg) do
-    Util.reply("Blah to you too, #{Util.mention(msg.author)}.", msg);
-  end
-
-  def lenny(msg) do
-    Util.reply(Enum.random(@lenny), msg);
-  end
-
-  def eight_ball(msg) do
-    Util.reply(Enum.random(@eight_ball), msg);
-  end
+  command "lenny", do: reply(context, Enum.random(@lenny))
+  command "8ball", do: reply(context, Enum.random(@eight_ball))
 
 end

@@ -1,64 +1,59 @@
 defmodule Hourai.Commands.Admin do
 
+  use Hourai.CommandModule
+
   alias Hourai.Precondition
   alias Hourai.CommandParser
   alias Hourai.Util
   alias Nostrum.Api
-  alias Nostrum.Struct.User
+  alias Nostrum.Struct.Guild.Member
 
-  def kick(msg, options) do
-    with {:ok, guild} <- check_permissions(msg, :kick_members) do
-      get_users(options, guild)
+  command "kick" do
+    with {:ok, guild} <- check_permissions(context, :kick_members) do
+      results =
+      get_users(context, guild)
       |> api_action_per_user(fn user ->
           Api.remove_member(guild.id, user.id)
         end)
       |> parse_results("kicked", "user")
-      |> Util.reply(msg)
+      reply(context, results)
     end
   end
 
-  def set_mute(msg, state, options) do
-    with {:ok, guild} <- check_permissions(msg, :mute_members) do
-      action = if state, do: "muted", else: "unmuted"
-      modify_users(options, guild, action , %{mute: state})
-      |> Util.reply(msg)
-    end
-  end
+  # TODO(james7132): Figure a less ugly way to write this
+  command "mute", do: modify_users(context, :mute_members, "muted", %{mute: true})
+  command "unmute", do: modify_users(context, :mute_members, "unmuted", %{mute: false})
+  command "deafen", do: modify_users(context, :deafen_members, "deafened", %{deaf: true})
+  command "undeafen", do: modify_users(context, :deafen_members, "undeafened", %{deaf: false})
 
-  def set_deaf(msg, state, options) do
-    with {:ok, guild} <- check_permissions(msg, :deafen_members) do
-      action = if state, do: "deafened", else: "undeafened"
-      modify_users(options, guild, action, %{deaf: state})
-      |> Util.reply(msg)
-    end
-  end
-
-  def set_nickname(msg, nickname, options) do
-    with {:ok, guild} <- check_permissions(msg, :manage_nicknames) do
-      modify_users(options, guild, "nicknamed", %{nick: nickname})
-      |> Util.reply(msg)
-    end
-  end
-
-  defp check_permissions(msg, permission) do
+  defp check_permissions(context, permission) do
+    msg = context.msg
     with {:ok, _, _} <- Precondition.has_guild_permission(msg, Util.me(), permission),
          {:ok, guild, _} <- Precondition.has_guild_permission(msg, msg.author, permission) do
       {:ok, guild}
     end
   end
 
-  defp get_users(options, guild) do
-    options
-    |> Enum.map(&CommandParser.parse_user(&1, guild.members))
-    |> Enum.filter(&match?(%User{}, &1))
+  defp get_users(context, guild) do
+    context.args
+    |> Enum.map(&CommandParser.parse_guild_member(&1, guild))
+    |> Enum.map(fn member ->
+        case member do
+          %Member{} -> member.user
+          _ -> nil
+        end
+      end)
+    |> Enum.filter(fn x -> x end) # Filter non-matches
   end
 
-  defp modify_users(options, guild ,action, modify_opts) do
-    get_users(options, guild)
-    |> api_action_per_user(fn user ->
-      Api.modify_member(guild.id, user.id, modify_opts)
-      end)
-    |> parse_results(action, "user")
+  defp modify_users(context, permission, action, modify_opts) do
+    with {:ok, guild} <- check_permissions(context, permission) do
+      results =
+        get_users(context, guild)
+        |> api_action_per_user(&Api.modify_member(guild.id, &1.id, modify_opts))
+        |> parse_results(action, "user")
+      reply(context, results)
+    end
   end
 
   defp parse_results({success, failures}, action, unit) do

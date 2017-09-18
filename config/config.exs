@@ -1,7 +1,17 @@
 use Mix.Config
 
+alias Hourai.Commands
+
 config :hourai,
-  ecto_repos: [Hourai.Repo]
+  ecto_repos: [Hourai.Repo],
+  prefix: "~",
+  root_modules: [
+    Commands.Admin,
+    Commands.Standard,
+    Commands.Owner,
+    Commands.Custom,
+    Commands.Nitori.Misc,
+  ]
 
 config :hourai, Hourai.Repo,
   adapter: Ecto.Adapters.Postgres,
