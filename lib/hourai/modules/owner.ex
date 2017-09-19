@@ -2,7 +2,13 @@ defmodule Hourai.Commands.Owner do
 
   use Hourai.CommandModule
 
+  alias Hourai.Precondition
+
   submodule Hourai.Commands.Owner.Blacklist
+
+  def module_preconditions(context) do
+    Precondition.author_is_owner(context)
+  end
 
 end
 

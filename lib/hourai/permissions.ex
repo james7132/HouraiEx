@@ -47,4 +47,11 @@ defmodule Hourai.Permissions do
     Enum.filter(@permissions, &has_permission(permissions, &1))
   end
 
+  def to_string(permission) do
+    permission
+    |> Atom.to_string
+    |> String.replace("_", " ")
+    |> String.capitalize
+  end
+
 end

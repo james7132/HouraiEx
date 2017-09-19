@@ -16,22 +16,23 @@ defmodule Hourai.CommandModule do
       @commands []
       @submodules []
 
-      @command_doc @name
+      def module_preconditions(context), do: context
+      def command_preconditions(context, command), do: context
+
+      defoverridable [module_preconditions: 1, command_preconditions: 2]
     end
   end
 
   defmacro __before_compile__(_env) do
     quote do
-      def module_descriptor(include_submodules \\ true) do
+      def module_descriptor() do
+        submodules = for sub <- @submodules, do: sub.module_descriptor()
         %{
           name: @name,
           prefix: @prefix,
           module: __MODULE__,
           commands: @commands,
-          help: @command_doc,
-          submodules: Enum.map(@submodules, fn submodule ->
-            submodule.module_descriptor()
-           end)
+          submodules: submodules
         }
       end
     end
@@ -41,7 +42,7 @@ defmodule Hourai.CommandModule do
     function_name = String.to_atom(name)
     quote do
       @doc unquote(Keyword.get(opts, :help) || false)
-      @commands [{unquote(function_name), unquote(opts)}] ++ @commands
+      @commands [{unquote(function_name), unquote(opts)} | @commands]
       def unquote(function_name)(unquote_splicing([{:context, [], nil}])) do
         unquote(expression)
       end

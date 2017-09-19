@@ -3,22 +3,31 @@ defmodule Hourai.CommandService do
   alias Hourai.CommandParser
   alias Hourai.Util
 
-  defmacro __using__(_) do
-    [quote do
-      @before_compile Hourai.CommandService
-    end] ++
-    Enum.map(Application.get_env(:hourai, :root_modules), fn module ->
-      quote do
-        require unquote(module)
-      end
-    end)
+  defp root_modules() do
+    Application.get_env(:hourai, :root_modules)
   end
 
-  defmacro __before_compile__(_) do
-    Enum.map(Application.get_env(:hourai, :root_modules), fn module ->
-      quote_module_commands(module.module_descriptor(), [])
-    end) ++
+  defmacro __using__(_) do
+    for module <- root_modules() do
+      quote do
+        require(unquote(module))
+      end
+    end
+    ++
     [quote do
+      import Hourai.CommandService
+
+      @before_compile Hourai.CommandService
+
+      Module.put_attribute(__MODULE__, :root_modules, unquote(root_modules()))
+
+      def check_command_preconditions(context, module, command) do
+        with %{} = context <- module.module_preconditions(context),
+             %{} = context <- module.command_preconditions(context, command) do
+          context
+        end
+      end
+
       def execute(command, msg) when is_binary(command) do
         command |> String.trim |> CommandParser.split |> execute(msg)
       end
@@ -33,56 +42,53 @@ defmodule Hourai.CommandService do
 
       # General Help
       def help([],  msg) do
-        modules =
-          Application.get_env(:hourai, :root_modules)
-          |> Enum.map(fn module ->
-            descriptor = module.module_descriptor()
-            IO.inspect descriptor.help
-            commands = for {cmd, _} <- descriptor.commands, do: Atom.to_string(cmd)
-            submodules = for sub <- descriptor.submodules, do: "#{sub.prefix}*"
-            "**#{descriptor.name}**: #{
-              commands ++ submodules
-              |> Util.codify_list()
-            }"
-          end)
-        Nostrum.Api.create_message(msg.channel_id,
-        """
-        Available Commands:
-        #{Enum.join(modules, "\n")}
-        Use `~help <command>` for more information on individual commands.
-        """)
+        general_help(@root_modules, %{msg: msg, args: []})
       end
 
+    end]
+  end
+
+  defmacro __before_compile__(_) do
+    for module <- root_modules() do
+      quote_module_commands(module.module_descriptor())
+    end
+    ++
+    [quote do
       # Must be defined last as a catch-all
       def execute(args, msg) do
         handle_event({:invalid_command, {args, msg}})
       end
 
       def help(_, msg) do
-        Nostrum.Api.create_message(msg.channel_id, "Unknown command.")
+        Hourai.Util.reply("Unknown command.", msg)
       end
     end]
   end
 
-  defp quote_module_commands(descriptor, prefix) do
+  defp quote_module_commands(descriptor, prefix \\ []) do
     module_prefix = Map.get(descriptor, :prefix)
     prefix_list = if module_prefix, do: prefix ++ [module_prefix], else: prefix
-    commands = Enum.map(descriptor.commands,
-                        &create_matched_execute(prefix_list, descriptor.module,
-                                                &1))
-    submodule_commands = Enum.map(descriptor.submodules,
-                                  &quote_module_commands(&1, prefix_list))
-    commands ++ submodule_commands
+    commands = for command <- descriptor.commands, do:
+                 command_matchers(prefix_list, descriptor.module, command)
+    submodule_commands = for sub <- descriptor.submodules, do:
+                           quote_module_commands(sub, prefix_list)
+    [commands | submodule_commands]
   end
 
-  defp create_matched_execute(prefix, module, {func, opts}) do
+  defp command_matchers(prefix, module, {func, opts} = command) do
     command_name = prefix ++ [Atom.to_string(func)]
     full_name = Enum.join(command_name, " ")
     help = "`~#{full_name}`\n" <> (Keyword.get(opts, :help) || "")
-    IO.puts("Compiling matcher for command \"#{full_name}\"...")
+    IO.puts("Compiling matchers for command \"#{full_name}\"...")
     quote do
       def execute([unquote_splicing(command_name) | args], msg) do
-        unquote(module).unquote(func)(%{msg: msg, args: args})
+        context = %{msg: msg, args: args}
+        case check_command_preconditions(context,
+                                         unquote(module),
+                                         unquote(command)) do
+          {:error, reason} -> Hourai.Util.reply(reason, msg)
+          %{} = ctx -> unquote(module).unquote(func)(ctx)
+        end
       end
 
       def help([unquote_splicing(command_name) | _], msg) do
@@ -91,16 +97,58 @@ defmodule Hourai.CommandService do
     end
   end
 
+  def general_help(modules, context) do
+    mods = Enum.map(modules, &(&1.module_descriptor()))
+    {context, valid_modules} = filter_invalid_modules(mods, context)
+    modules = Enum.map(valid_modules, &module_summary(&1, context))
+    Hourai.Util.reply(
+      """
+      Available Commands:
+      #{modules |> Enum.sort |> Enum.join("\n")}
+      Use `~help <command>` for more information on individual commands.
+      """, context.msg)
+  end
+
+  defp module_summary(descriptor, context) do
+    {context, valid_commands} =
+      filter_invalid_commands(descriptor.module, descriptor.commands, context)
+    {context, valid_submodules} =
+      filter_invalid_modules(descriptor.submodules, context)
+    commands = for {cmd, _} <- valid_commands, do: Atom.to_string(cmd)
+    submodules = for sub <- valid_submodules, do: "#{sub.prefix}*"
+    "**#{descriptor.name}**: #{
+      Enum.sort(commands) ++ Enum.sort(submodules)
+      |> Util.codify_list()
+    }"
+  end
+
+  defp filter_invalid_modules(descriptors, context) do
+    Enum.reduce(descriptors, {context, []}, fn (descriptor, {ctx, mods}) ->
+      case descriptor.module.module_preconditions(ctx) do
+        %{} = new_ctx -> {new_ctx, [descriptor] ++ mods}
+        {:error, _} -> {ctx, mods}
+      end
+    end)
+  end
+
+  defp filter_invalid_commands(module, commands, context) do
+    Enum.reduce(commands, {context, []}, fn (command, {ctx, cmds}) ->
+      case module.command_preconditions(ctx, command) do
+        %{} = new_ctx -> {new_ctx, [command] ++ cmds}
+        {:error, _} -> {ctx, cmds}
+      end
+    end)
+  end
 end
 
 defmodule Hourai.Commands do
 
   use Hourai.CommandService
 
-  #alias Hourai.Schema.Discord.CustomCommand
   alias Hourai.Schema.Discord.BlacklistedUser
   alias Hourai.Repo
   alias Hourai.Util
+  alias Hourai.Schema.Discord.CustomCommand
   alias Nostrum.Cache.Guild.GuildServer
 
   require Logger

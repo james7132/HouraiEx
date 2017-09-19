@@ -1,4 +1,5 @@
 defmodule Hourai.Schema.Discord.BlacklistedUser do
+
   use Ecto.Schema
   import Ecto.Changeset
 
