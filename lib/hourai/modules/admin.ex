@@ -12,70 +12,84 @@ defmodule Hourai.Commands.Admin do
 
   submodule Hourai.Commands.Admin.Prune
 
-  command "kick", do:
+  def module_preconditions(context) do
+    Precondition.in_guild(context)
+  end
+
+  def command_preconditions(context, {_, opts}) do
+    context = Map.merge(context, %{me: Util.me(), author: context.msg.author})
+    permission = Keyword.get(opts, :permission)
+    if permission do
+      IO.puts permission
+      with %{} = context <- Precondition.has_guild_permission(context, :me, permission),
+           %{} = context <- Precondition.has_guild_permission(context, :author, permission) do
+        context
+      end
+    else
+      context
+    end
+  end
+
+  command("kick", permission: :kick_members) do
     start(context, "muted")
-    |> permission(:kick_members)
     |> Map.put(:func,
        fn guild -> fn user ->
          Api.remove_member(guild.id, user.id)
         end end)
-    |> run_command
+    |> run_command()
+  end
 
-  command "ban", do:
+  command("ban") do
     start(context, "banned")
-    |> permission(:ban_members)
     |> Map.put(:func,
         fn guild -> fn user ->
           Api.create_guild_ban(guild.id, get_user_id(user), 0)
         end end)
-    |> run_command
+    |> run_command()
+  end
 
-  command "softban", do:
+  command("softban") do
     start(context, "softbanned")
-    |> permission(:ban_members)
     |> Map.put(:func,
        fn guild -> fn user ->
          user_id = get_user_id(user)
          Api.create_guild_ban(guild.id, user_id, 0)
          Api.remove_guild_ban(guild.id, user_id)
         end end)
-    |> run_command
+    |> run_command()
+  end
 
   # TODO(james7132): Figure a less ugly way to write this
-  command "mute", do:
+  command("mute") do
     start(context, "muted")
-    |> permission(:mute_members)
     |> modify_users(%{mute: true})
-    |> run_command
+    |> run_command()
+  end
 
-  command "unmute", do:
+  command("unmute") do
     start(context, "unmuted")
-    |> permission(:mute_members)
     |> modify_users(%{mute: false})
     |> run_command
+  end
 
-  command "deafen", do:
+  command("deafen")do
     start(context, "deafened")
-    |> permission(:deafen_members)
     |> modify_users(%{deaf: true})
-    |> run_command
+    |> run_command()
+  end
 
-  command "undeafen", do:
+  command("undeafen") do
     start(context, "undeafened")
-    |> permission(:deafen_members)
     |> modify_users(%{deaf: false})
-    |> run_command
+    |> run_command()
+  end
 
   defp get_user_id(%Member{user: user}), do: get_user_id(user)
   defp get_user_id(%User{id: id}), do: id
   defp get_user_id(user), do: user
 
   defp start(context, action) do
-    %{context: context, action: action}
-  end
-
-  defp permission(command_info, permission) do
-    Map.put(command_info, :permission, permission)
+    %{context | action: action}
   end
 
   defp modify_users(command_info, modify_opts) do
@@ -86,23 +100,13 @@ defmodule Hourai.Commands.Admin do
   end
 
   defp run_command(command_info) do
-    with {:ok, guild} <- check_permissions(command_info) do
-      api_func = command_info.func.(guild)
-      results =
-        AdminUtil.get_users(command_info.context, guild)
-        |> api_action_per_user(api_func)
-        |> parse_results(command_info.action, "user")
-      reply(command_info.context, results)
-    end
-  end
-
-  defp check_permissions(command_info) do
-    msg = command_info.context.msg
-    permission = command_info.permission
-    with {:ok, _, _} <- Precondition.has_guild_permission(msg, Util.me(), permission),
-         {:ok, guild, _} <- Precondition.has_guild_permission(msg, msg.author, permission) do
-      {:ok, guild}
-    end
+    guild = command_info.guild
+    api_func = command_info.func.(guild)
+    results =
+      AdminUtil.get_users(command_info.context, guild)
+      |> api_action_per_user(api_func)
+      |> parse_results(command_info.action, "user")
+    reply(command_info.context, results)
   end
 
   defp parse_results({success, failures}, action, unit) do
@@ -119,7 +123,7 @@ defmodule Hourai.Commands.Admin do
     |> Enum.reduce({0, []}, fn (task, {success, failures})->
       case Task.await(task) do
         {:ok} -> {success + 1, failures}
-        error -> {success, failures ++ [Exception.message(error)]}
+        error -> {success, [Exception.message(error)] ++ failures}
       end
     end)
   end

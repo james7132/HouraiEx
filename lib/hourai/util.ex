@@ -25,7 +25,7 @@ defmodule Hourai.Util do
   """
   def get_guild_permission(guild, roles) do
     # Bitwise OR all the permissions together
-    Enum.reduce(get_roles(guild, roles), fn(role, acc) ->
+    Enum.reduce(get_roles(guild, roles), 0, fn(role, acc) ->
       acc ||| role.permissions
     end)
   end

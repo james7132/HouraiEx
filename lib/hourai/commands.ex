@@ -112,7 +112,7 @@ defmodule Hourai.CommandService do
   defp module_summary(descriptor, context) do
     {context, valid_commands} =
       filter_invalid_commands(descriptor.module, descriptor.commands, context)
-    {context, valid_submodules} =
+    {_, valid_submodules} =
       filter_invalid_modules(descriptor.submodules, context)
     commands = for {cmd, _} <- valid_commands, do: Atom.to_string(cmd)
     submodules = for sub <- valid_submodules, do: "#{sub.prefix}*"

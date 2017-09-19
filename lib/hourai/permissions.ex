@@ -33,7 +33,8 @@ defmodule Hourai.Permissions do
     :manage_emoji
   ]
 
-  def has_permission(permission_set, permission) do
+  def has_permission(permission_set, permission) when is_integer(permission_set) and
+                                                      is_atom(permission) do
     index = Enum.find_index(@permissions, &Kernel.==(&1,permission))
     mask = 1 <<< index
     has_perm = (permission_set &&& mask) != 0

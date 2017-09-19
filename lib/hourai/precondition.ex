@@ -21,7 +21,7 @@ defmodule Hourai.Precondition do
     case Map.get(context, :guild) do
       nil ->
         case Cache.Guild.GuildServer.get(channel_id: context.msg.channel_id) do
-          %Guild{} = guild -> %{context | guild: guild}
+          {:ok, %Guild{} = guild} -> Map.put(context, :guild, guild)
           {:error, _} -> {:error, "This command is only usable in a server!"}
         end
       %Guild{} -> context
@@ -29,13 +29,13 @@ defmodule Hourai.Precondition do
   end
 
   def has_guild_permission(context, user_key, permission) do
-    guild = Map.get!(context, :guild)
-    user = Map.get!(context, user_key)
+    guild = Map.fetch!(context, :guild)
+    user = Map.fetch!(context, user_key)
     case Util.get_guild_member(user.id, guild) do
       {:ok, %Member{roles: roles}} ->
         perms = Util.get_guild_permission(guild, roles)
         if Permissions.has_permission(perms, permission) do
-          {:ok, context}
+          context
         else
           perm_name = Permissions.to_string(permission)
           {:error, "#{user.username} does not have the `#{perm_name}` permission"}
