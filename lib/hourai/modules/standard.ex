@@ -6,6 +6,8 @@ defmodule Hourai.Commands.Standard do
   alias Hourai.Constants
   alias Hourai.Permissions
   alias Hourai.Precondition
+  alias Hourai.Repo
+  alias Hourai.Schema.Discord.CustomCommand
   alias Hourai.Util
   alias Nostrum.Cache
   alias Nostrum.Struct.Guild
@@ -13,6 +15,13 @@ defmodule Hourai.Commands.Standard do
 
   submodule Hourai.Commands.Standard.Hash
   submodule Hourai.Commands.Standard.Server
+
+  def command_preconditions(context, {cmd, _}) do
+    case cmd do
+      :command -> Precondition.in_guild(context)
+      _ -> context
+    end
+  end
 
   command "echo", do: reply(context, Enum.join(context.args, " "))
 
@@ -84,6 +93,51 @@ defmodule Hourai.Commands.Standard do
 
   command "invite", do: reply(context,
     "Use this link to add me to your server: https://discordapp.com/oauth2/authorize?client_id=208460637368614913&scope=bot&permissions=0xFFFFFFFFFFFF")
+
+  command "command", help:
+  """
+  Creates, updates, or deletes custom commnands.
+  First argument is always the name of the command, rest of the command is the expected response.
+
+  Calling the command with only the name will delete the command.
+
+  Examples:
+  `~command hello Hello world! => Creates/updates command "hello" with response "Hello world!"`
+  `~command hello => Deletes command "hello"`
+  """
+  do
+    case context.args do
+      [name] -> delete_command(context, name)
+      [name | args] -> add_or_update_command(context, name, args)
+    end
+  end
+
+  def add_or_update_command(context, name, response) do
+    result =
+      %CustomCommand{}
+      |> CustomCommand.changeset(%{
+        guild_id: context.guild.id,
+        name: name,
+        response: Enum.join(response, " ")
+      })
+      |> Repo.insert_or_update
+    case result do
+      {:ok, model} ->
+        reply(context, "Command `#{model.name}` created with response \"#{model.response}\"")
+      {:error, error} ->
+        reply(context, "Something went wrong: '#{error}'")
+    end
+  end
+
+  def delete_command(context, name) do
+    case Repo.get_by(CustomCommand, guild_id: context.guild.id, name: name) do
+      nil ->
+        reply(context, "Command `#{name}` does not exist!")
+      command ->
+        Repo.delete(command)
+        reply(context, "Command `#{name}` successfully deleted.")
+    end
+  end
 
 end
 

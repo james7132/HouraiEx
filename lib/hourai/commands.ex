@@ -50,7 +50,7 @@ defmodule Hourai.CommandService do
 
   defmacro __before_compile__(_) do
     for module <- root_modules() do
-      quote_module_commands(module.module_descriptor())
+      quote_module_commands(module.module_descriptor(%{}))
     end
     ++
     [quote do
@@ -98,13 +98,17 @@ defmodule Hourai.CommandService do
   end
 
   def general_help(modules, context) do
-    mods = Enum.map(modules, &(&1.module_descriptor()))
-    {context, valid_modules} = filter_invalid_modules(mods, context)
-    modules = Enum.map(valid_modules, &module_summary(&1, context))
+    {context, valid_modules} = filter_invalid_modules(modules, context)
+    modules =
+      valid_modules
+      |> Enum.map(&module_summary(&1, context))
+      |> Enum.filter(&(&1))
+      |> Enum.sort()
+      |> Enum.join("\n")
     Hourai.Util.reply(
       """
       Available Commands:
-      #{modules |> Enum.sort |> Enum.join("\n")}
+      #{modules}
       Use `~help <command>` for more information on individual commands.
       """, context.msg)
   end
@@ -114,18 +118,26 @@ defmodule Hourai.CommandService do
       filter_invalid_commands(descriptor.module, descriptor.commands, context)
     {_, valid_submodules} =
       filter_invalid_modules(descriptor.submodules, context)
-    commands = for {cmd, _} <- valid_commands, do: Atom.to_string(cmd)
+    commands = for {cmd, _} <- valid_commands, do: String.Chars.to_string(cmd)
     submodules = for sub <- valid_submodules, do: "#{sub.prefix}*"
-    "**#{descriptor.name}**: #{
-      Enum.sort(commands) ++ Enum.sort(submodules)
-      |> Util.codify_list()
-    }"
+    IO.inspect {descriptor.module, commands, submodules}
+    if Enum.any?(commands) or Enum.any?(submodules) do
+      "**#{descriptor.name}**: #{
+        Enum.sort(commands) ++ Enum.sort(submodules)
+        |> Util.codify_list()
+      }"
+    end
   end
 
-  defp filter_invalid_modules(descriptors, context) do
-    Enum.reduce(descriptors, {context, []}, fn (descriptor, {ctx, mods}) ->
-      case descriptor.module.module_preconditions(ctx) do
-        %{} = new_ctx -> {new_ctx, [descriptor] ++ mods}
+  defp filter_invalid_modules(modules, context) do
+    Enum.reduce(modules, {context, []}, fn (module, {ctx, mods}) ->
+      command_module =
+        case module do
+          %{:module => mod} -> mod
+          _ -> module
+        end
+      case command_module.module_preconditions(ctx) do
+        %{} = new_ctx -> {new_ctx, [command_module.module_descriptor(new_ctx)] ++ mods}
         {:error, _} -> {ctx, mods}
       end
     end)

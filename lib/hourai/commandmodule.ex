@@ -18,15 +18,18 @@ defmodule Hourai.CommandModule do
 
       def module_preconditions(context), do: context
       def command_preconditions(context, command), do: context
+      def module_descriptor(context), do: default_module_descriptor(context)
 
-      defoverridable [module_preconditions: 1, command_preconditions: 2]
+      defoverridable [module_preconditions: 1,
+                      command_preconditions: 2,
+                      module_descriptor: 1]
     end
   end
 
   defmacro __before_compile__(_env) do
     quote do
-      def module_descriptor() do
-        submodules = for sub <- @submodules, do: sub.module_descriptor()
+      def default_module_descriptor(context) do
+        submodules = for sub <- @submodules, do: sub.module_descriptor(context)
         %{
           name: @name,
           prefix: @prefix,

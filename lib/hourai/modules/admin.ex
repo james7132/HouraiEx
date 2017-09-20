@@ -157,8 +157,8 @@ defmodule Hourai.Commands.Admin do
       end
     end)
   end
-end
 
+end
 
 defmodule Hourai.AdminUtil do
 
