@@ -76,7 +76,7 @@ defmodule Hourai.CommandService do
   end
 
   defp command_matchers(prefix, module, {func, opts} = command) do
-    command_name = prefix ++ [Atom.to_string(func)]
+    command_name = if Keyword.get(opts, :default), do: prefix, else: prefix ++ [Atom.to_string(func)]
     full_name = Enum.join(command_name, " ")
     help = "`~#{full_name}`\n" <> (Keyword.get(opts, :help) || "")
     IO.puts("Compiling matchers for command \"#{full_name}\"...")

@@ -20,7 +20,6 @@ defmodule Hourai.Commands.Admin do
     context = Map.merge(context, %{me: Util.me(), author: context.msg.author})
     permission = Keyword.get(opts, :permission)
     if permission do
-      IO.puts permission
       with %{} = context <- Precondition.has_guild_permission(context, :me, permission),
            %{} = context <- Precondition.has_guild_permission(context, :author, permission) do
         context
@@ -31,57 +30,85 @@ defmodule Hourai.Commands.Admin do
   end
 
   command("kick", permission: :kick_members) do
-    start(context, "muted")
+    start(context, "kicked")
+    |> parse_users()
     |> Map.put(:func,
        fn guild -> fn user ->
-         Api.remove_member(guild.id, user.id)
+         Api.remove_member(guild.id, get_user_id(user))
         end end)
     |> run_command()
   end
 
-  command("ban") do
+  command("ban", permission: :ban_members) do
     start(context, "banned")
+    |> parse_users()
     |> Map.put(:func,
         fn guild -> fn user ->
-          Api.create_guild_ban(guild.id, get_user_id(user), 0)
+         IO.inspect {guild.id, get_user_id(user)}
+         Api.create_guild_ban(get_user_id(user), guild.id, 0)
         end end)
     |> run_command()
   end
 
-  command("softban") do
+  command("softban", permission: :ban_members) do
     start(context, "softbanned")
+    |> parse_users()
     |> Map.put(:func,
        fn guild -> fn user ->
          user_id = get_user_id(user)
-         Api.create_guild_ban(guild.id, user_id, 0)
+         Api.create_guild_ban(guild.id, user_id, 7)
          Api.remove_guild_ban(guild.id, user_id)
         end end)
     |> run_command()
   end
 
-  # TODO(james7132): Figure a less ugly way to write this
-  command("mute") do
+  command("mute", permission: :mute_members) do
     start(context, "muted")
+    |> parse_users()
     |> modify_users(%{mute: true})
     |> run_command()
   end
 
-  command("unmute") do
+  command("unmute", permission: :mute_members) do
     start(context, "unmuted")
+    |> parse_users()
     |> modify_users(%{mute: false})
     |> run_command
   end
 
-  command("deafen")do
+  command("deafen", permission: :deafen_members) do
     start(context, "deafened")
+    |> parse_users()
     |> modify_users(%{deaf: true})
     |> run_command()
   end
 
-  command("undeafen") do
+  command("undeafen", permission: :deafen_members) do
     start(context, "undeafened")
+    |> parse_users()
     |> modify_users(%{deaf: false})
     |> run_command()
+  end
+
+  command("move", permission: :move_members) do
+    src_channel = Enum.at(context.args, 0)
+    dst_channel = Enum.at(context.args, 1)
+    src = CommandParser.parse_channel(src_channel, context.guild)
+    dst = CommandParser.parse_channel(dst_channel, context.guild)
+    cond do
+      !src -> reply(context, "Invalid channel: `#{src_channel}`")
+      !dst -> reply(context, "Invalid channel: `#{dst_channel}`")
+      true ->
+        src_id = src.id
+        users =
+          context.guild.voice_states
+          |> Enum.filter(&match?(%{channel_id: ^src_id}, &1))
+          |> Enum.map(&(&1.user_id))
+        start(context, "moved")
+        |> Map.put(:users, users)
+        |> modify_users(%{channel_id: dst.id})
+        |> run_command()
+    end
   end
 
   defp get_user_id(%Member{user: user}), do: get_user_id(user)
@@ -89,7 +116,11 @@ defmodule Hourai.Commands.Admin do
   defp get_user_id(user), do: user
 
   defp start(context, action) do
-    %{context | action: action}
+    Map.put(context, :action, action)
+  end
+
+  defp parse_users(context) do
+    Map.put(context, :users,  AdminUtil.get_users(context, context.guild))
   end
 
   defp modify_users(command_info, modify_opts) do
@@ -99,21 +130,20 @@ defmodule Hourai.Commands.Admin do
     end end)
   end
 
-  defp run_command(command_info) do
-    guild = command_info.guild
-    api_func = command_info.func.(guild)
+  defp run_command(context) do
+    api_func = context.func.(context.guild)
     results =
-      AdminUtil.get_users(command_info.context, guild)
+      context.users
       |> api_action_per_user(api_func)
-      |> parse_results(command_info.action, "user")
-    reply(command_info.context, results)
+      |> parse_results(context.action, "user")
+    reply(context, results)
   end
 
   defp parse_results({success, failures}, action, unit) do
     response = "Successfully #{action} #{success} #{unit}s."
     case failures do
       [] -> response
-      errors -> response <> "Errors:\n  #{Enum.join(errors, "\n  ")}"
+      errors -> response <> "\n\nErrors:\n  #{Enum.join(errors, "\n  ")}"
     end
   end
 
@@ -123,66 +153,12 @@ defmodule Hourai.Commands.Admin do
     |> Enum.reduce({0, []}, fn (task, {success, failures})->
       case Task.await(task) do
         {:ok} -> {success + 1, failures}
-        error -> {success, [Exception.message(error)] ++ failures}
+        {:error, %{message: message}} -> {success, [message["message"]] ++ failures}
       end
     end)
   end
 end
 
-defmodule Hourai.Commands.Admin.Prune do
-
-  use Hourai.CommandModule
-
-  alias Hourai.AdminUtil
-  alias Nostrum.Api
-  alias Nostrum.Cache.Guild.GuildServer
-  alias Nostrum.Struct.User
-  alias Nostrum.Struct.Guild.Member
-
-  command "embed", do:
-    messages(context)
-    |> filter(fn msg -> Enum.any?(msg.attachements) || Enum.any?(msg.embeds) end)
-    |> execute
-
-  command "user" do
-    users =
-      context
-      |> AdminUtil.get_users(GuildServer.get(channel_id: context.msg.channel_id))
-      |> Enum.map(fn member ->
-          case member do
-            %Member{} -> member.user.id
-            %User{} -> member.id
-          end
-        end)
-      |> Enum.into(%MapSet{})
-    messages(context)
-    |> filter(fn msg -> MapSet.member?(users, msg.author.id) end)
-    |> execute
-  end
-
-  defp messages(context, count \\ 100) do
-    {:ok, messages} = Api.get_channel_messages(context.msg.channel_id, count)
-    {context, count, messages}
-  end
-
-  defp filter({context, _, messages}, filter_fun) do
-    {count, messages} =
-      Enum.reduce(messages, {0, []}, fn (message, {count, msg_list}) ->
-        if filter_fun.(message) do
-          {count + 1, [message] ++ msg_list}
-        else
-          {count, msg_list}
-        end
-      end)
-    {context, count, messages}
-  end
-
-  defp execute({context, count, messages}) do
-    {:ok } = Api.bulk_delete_messages(context.msg.channel_id, messages)
-    reply(context, "Successfully deleted #{count} messages")
-  end
-
-end
 
 defmodule Hourai.AdminUtil do
 

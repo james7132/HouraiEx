@@ -121,21 +121,18 @@ defmodule Hourai.Commands.Standard.Server do
 
   @prefix "server"
 
+  def module_preconditions(context) do
+    Precondition.in_guild(context)
+  end
+
   command "permissions" do
-    with {:ok, guild} <- Precondition.in_guild(context.msg) do
-      user = Util.get_default_target_user(context.msg)
-      with {:ok, member} <- Util.get_guild_member(user.id, guild) do
-        guild
-        |> Util.get_guild_permission(member.roles)
-        |> Permissions.get_permissions
-        |> Util.codify_list(fn perm ->
-            perm
-            |> Atom.to_string
-            |> String.replace("_", " ")
-            |> String.capitalize
-          end)
-        |> Util.reply(context.msg)
-      end
+    user = Util.get_default_target_user(context.msg)
+    with {:ok, member} <- Util.get_guild_member(user.id, context.guild) do
+      context.guild
+      |> Util.get_guild_permission(member.roles)
+      |> Permissions.get_permissions()
+      |> Util.codify_list(&Permissions.to_string/1)
+      |> Util.reply(context.msg)
     end
   end
 

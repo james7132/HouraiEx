@@ -58,8 +58,10 @@ defmodule Hourai.CommandParser do
   defp has_id(obj, id) do
     check =
       case obj do
-        %Member{} = member -> if member.user.id == id, do: member
-        _ -> if obj.id == id, do: obj
+        %User{} = user -> user.id == id
+        %Member{} = member -> member.user.id == id
+        %{user: user} -> has_id(user, id)
+        %{id: obj_id} -> obj_id == id
       end
     if check, do: obj
   end
@@ -69,7 +71,11 @@ defmodule Hourai.CommandParser do
       case obj do
         %User{} = user -> user.username == name
         %Member{} = member -> member.nick == name || has_name(member.user, name)
-        _ -> obj.name == name
+        %{user: user} -> has_name(user, name)
+        %{username: username} -> username == name
+        %{nick: nickname} ->
+          IO.puts nickname
+          nickname == name
       end
     if check, do: obj
   end
