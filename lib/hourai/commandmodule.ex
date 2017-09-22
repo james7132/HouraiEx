@@ -20,9 +20,12 @@ defmodule Hourai.CommandModule do
       def command_preconditions(context, command), do: context
       def module_descriptor(context), do: default_module_descriptor(context)
 
+      def fallback_execute(args, msg), do: {:error, "not implemented"}
+
       defoverridable [module_preconditions: 1,
                       command_preconditions: 2,
-                      module_descriptor: 1]
+                      module_descriptor: 1,
+                      fallback_execute: 2]
     end
   end
 

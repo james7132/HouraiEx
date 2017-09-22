@@ -4,12 +4,11 @@ defmodule Hourai do
   def start(_, _) do
     import Supervisor.Spec
 
-    children = [
-      supervisor(Hourai.Repo, [])
-    ] ++
-    for i <- 1..System.schedulers_online, do: worker(Hourai.Consumer, [], id: i)
-
-    Supervisor.start_link(children, strategy: :one_for_one)
+    Supervisor.start_link([
+      supervisor(Hourai.Repo, []),
+      supervisor(Hourai.Reddit.Supervisor, []),
+      supervisor(Hourai.Commands.Supervisor, []),
+    ], strategy: :one_for_one)
   end
 
 end

@@ -9,6 +9,7 @@ config :hourai,
     Commands.Admin,
     Commands.Standard,
     Commands.Owner,
+    Commands.Feeds,
     Commands.Custom,
     Commands.Nitori.Misc,
   ]

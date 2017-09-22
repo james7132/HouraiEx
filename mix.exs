@@ -22,6 +22,7 @@ defmodule Hourai.Mixfile do
   def application do
     [
       extra_applications: [:logger],
+      #applications: [:httpotion],
       mod: {Hourai, []}
     ]
   end
@@ -29,10 +30,13 @@ defmodule Hourai.Mixfile do
   # Dependencies
   defp deps do
     [
-      {:nostrum, git: "https://github.com/Kraigie/nostrum.git"},
+      {:nostrum, github: "Kraigie/nostrum", branch: "master"},
       {:postgrex, ">= 0.0.0"},
       {:ecto, "~> 2.1"},
       {:ecto_enum, "~> 1.0"},
+      {:httpotion, "~> 3.0.2"},
+      {:timex, "~> 3.1"},
+      {:timex_ecto, "~> 3.0"},
       {:excoveralls, "~> 0.7", only: :test}
     ]
   end

@@ -34,4 +34,14 @@ defmodule Hourai.Commands.Custom do
     for command <- Repo.all(query), do: {command, []}
   end
 
+  def fallback_execute([prefix | args], msg) do
+    context = %{msg: msg, args: args}
+    with %{} = context <- Precondition.in_guild(context) do
+      case Repo.get_by(CustomCommand, guild_id: context.guild.id, name: prefix) do
+        nil -> {:error, "no matching custom command"}
+        %CustomCommand{response: response} -> reply(context, response)
+      end
+    end
+  end
+
 end

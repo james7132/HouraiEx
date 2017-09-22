@@ -1,10 +1,10 @@
-defmodule Hourai.Consumer do
+defmodule Hourai.Commands.Consumer do
 
   use Nostrum.TaskedConsumer
 
   alias Hourai.Commands
 
-  def start_link do
+  def start_link() do
     TaskedConsumer.start_link(__MODULE__)
   end
 
